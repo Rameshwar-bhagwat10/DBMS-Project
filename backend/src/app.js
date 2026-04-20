@@ -3,6 +3,7 @@ const cors = require("cors");
 
 const testRoutes = require("./routes/testRoutes");
 const bookRoutes = require("./routes/bookRoutes");
+const memberRoutes = require("./routes/memberRoutes");
 const errorMiddleware = require("./middlewares/errorMiddleware");
 
 const app = express();
@@ -15,6 +16,8 @@ app.use(express.json());
 app.use("/api", testRoutes);
 // Book module endpoints.
 app.use("/api/books", bookRoutes);
+// Member module endpoints.
+app.use("/api/members", memberRoutes);
 
 // Keep error handler at the end of middleware chain.
 app.use(errorMiddleware);
