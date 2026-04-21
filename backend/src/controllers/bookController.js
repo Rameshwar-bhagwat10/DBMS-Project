@@ -14,8 +14,18 @@ async function createBook(req, res, next) {
 // Fetch all books with aggregated author names.
 async function getAllBooks(req, res, next) {
 	try {
-		const books = await bookService.getAllBooks();
+		const books = await bookService.getAllBooks(req.query);
 		return sendSuccess(res, "Books fetched successfully", books);
+	} catch (error) {
+		return next(error);
+	}
+}
+
+// Search books by title or author name.
+async function searchBooks(req, res, next) {
+	try {
+		const books = await bookService.searchBooks(req.query);
+		return sendSuccess(res, "Books search completed successfully", books);
 	} catch (error) {
 		return next(error);
 	}
@@ -54,6 +64,7 @@ async function deleteBook(req, res, next) {
 module.exports = {
 	createBook,
 	getAllBooks,
+	searchBooks,
 	getBookById,
 	updateBook,
 	deleteBook,

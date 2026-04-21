@@ -1,5 +1,14 @@
 const bookModel = require("../models/bookModel");
 
+const MAX_PAGE_SIZE = 100;
+const BOOK_SORT_FIELDS = new Set([
+	"book_id",
+	"title",
+	"publisher",
+	"total_copies",
+	"available_copies",
+]);
+
 // Builds consistent operational errors for middleware to format.
 function createError(message, statusCode = 400) {
 	const error = new Error(message);
@@ -16,6 +25,109 @@ function parseBookId(id) {
 	}
 
 	return bookId;
+}
+
+function parsePositiveInteger(value, fieldName) {
+	const parsed = Number(value);
+
+	if (!Number.isInteger(parsed) || parsed <= 0) {
+		throw createError(`${fieldName} must be a positive integer`, 400);
+	}
+
+	return parsed;
+}
+
+function parsePaginationOptions(queryParams = {}) {
+	const hasPage = queryParams.page !== undefined;
+	const hasLimit = queryParams.limit !== undefined;
+
+	if (!hasPage && !hasLimit) {
+		return {
+			paginated: false,
+			page: 1,
+			limit: null,
+			offset: 0,
+		};
+	}
+
+	const page = parsePositiveInteger(hasPage ? queryParams.page : 1, "page");
+	const limit = parsePositiveInteger(hasLimit ? queryParams.limit : 10, "limit");
+
+	if (limit > MAX_PAGE_SIZE) {
+		throw createError(`limit must be less than or equal to ${MAX_PAGE_SIZE}`, 400);
+	}
+
+	return {
+		paginated: true,
+		page,
+		limit,
+		offset: (page - 1) * limit,
+	};
+}
+
+function parseSortOptions(queryParams, allowedSortFields, defaultSortField) {
+	const sortBy =
+		queryParams.sort !== undefined ? String(queryParams.sort).trim().toLowerCase() : defaultSortField;
+
+	if (!allowedSortFields.has(sortBy)) {
+		throw createError(`sort must be one of: ${Array.from(allowedSortFields).join(", ")}`, 400);
+	}
+
+	const sortOrder =
+		queryParams.order !== undefined ? String(queryParams.order).trim().toUpperCase() : "ASC";
+
+	if (sortOrder !== "ASC" && sortOrder !== "DESC") {
+		throw createError("order must be either ASC or DESC", 400);
+	}
+
+	return {
+		sortBy,
+		sortOrder,
+	};
+}
+
+function parseBooleanFilter(value, fieldName) {
+	if (value === undefined || value === null) {
+		return null;
+	}
+
+	const normalized = String(value).trim().toLowerCase();
+
+	if (normalized === "true" || normalized === "1" || normalized === "yes") {
+		return true;
+	}
+
+	if (normalized === "false" || normalized === "0" || normalized === "no") {
+		return false;
+	}
+
+	throw createError(`${fieldName} must be either true or false`, 400);
+}
+
+function parseOptionalTextQuery(value, fieldName) {
+	if (value === undefined || value === null) {
+		return null;
+	}
+
+	const text = String(value).trim();
+
+	if (!text) {
+		throw createError(`${fieldName} cannot be empty`, 400);
+	}
+
+	return text;
+}
+
+function buildPaginatedResponse(items, pagination, totalItems) {
+	return {
+		items,
+		pagination: {
+			page: pagination.page,
+			limit: pagination.limit,
+			total_items: totalItems,
+			total_pages: totalItems === 0 ? 0 : Math.ceil(totalItems / pagination.limit),
+		},
+	};
 }
 
 // Trims values and converts empty text to null.
@@ -181,21 +293,30 @@ async function createBook(payload) {
 	}
 
 	const connection = await bookModel.getConnection();
+	let transactionStarted = false;
 
 	try {
 		// All related inserts must succeed together.
 		await connection.beginTransaction();
+		transactionStarted = true;
 
 		const bookId = await bookModel.insertBook(connection, data);
 		await attachAuthorsToBook(connection, bookId, data.authors);
 
 		await connection.commit();
+		transactionStarted = false;
 
 		const createdBook = await bookModel.getBookById(bookId);
 		return toBookResponse(createdBook);
 	} catch (error) {
 		// Revert partial writes when any step fails.
-		await connection.rollback();
+		if (transactionStarted) {
+			try {
+				await connection.rollback();
+			} catch (rollbackError) {
+				// Keep original application error as primary failure.
+			}
+		}
 
 		if (error.code === "ER_DUP_ENTRY") {
 			throw createError("Book with this ISBN already exists", 409);
@@ -208,9 +329,61 @@ async function createBook(payload) {
 }
 
 // READ ALL: fetch list with aggregated author names.
-async function getAllBooks() {
-	const books = await bookModel.getAllBooks();
-	return books.map(toBookResponse);
+async function getAllBooks(queryParams = {}) {
+	const pagination = parsePaginationOptions(queryParams);
+	const sort = parseSortOptions(queryParams, BOOK_SORT_FIELDS, "book_id");
+
+	const options = {
+		available: parseBooleanFilter(queryParams.available, "available"),
+		authorFilter: parseOptionalTextQuery(queryParams.author, "author"),
+		searchTerm: null,
+		sortBy: sort.sortBy,
+		sortOrder: sort.sortOrder,
+		limit: pagination.limit,
+		offset: pagination.offset,
+	};
+
+	const rows = await bookModel.getBooksForListing(options);
+	const books = rows.map(toBookResponse);
+
+	if (!pagination.paginated) {
+		return books;
+	}
+
+	const totalItems = await bookModel.countBooksForListing(options);
+	return buildPaginatedResponse(books, pagination, totalItems);
+}
+
+// SEARCH: matches books by title or author name.
+async function searchBooks(queryParams = {}) {
+	const searchTerm = parseOptionalTextQuery(queryParams.query, "query");
+
+	if (!searchTerm) {
+		throw createError("query is required", 400);
+	}
+
+	const pagination = parsePaginationOptions(queryParams);
+	const sort = parseSortOptions(queryParams, BOOK_SORT_FIELDS, "title");
+
+	const options = {
+		available: null,
+		authorFilter: null,
+		searchTerm,
+		sortBy: sort.sortBy,
+		sortOrder: sort.sortOrder,
+		limit: pagination.limit,
+		offset: pagination.offset,
+	};
+
+	const rows = await bookModel.getBooksForListing(options);
+	const books = rows.map(toBookResponse);
+
+	if (!pagination.paginated) {
+		return books;
+	}
+
+	const totalItems = await bookModel.countBooksForListing(options);
+	return buildPaginatedResponse(books, pagination, totalItems);
 }
 
 // READ ONE: validate id and return one book or 404.
@@ -229,10 +402,12 @@ async function getBookById(id) {
 async function updateBook(id, payload) {
 	const bookId = parseBookId(id);
 	const connection = await bookModel.getConnection();
+	let transactionStarted = false;
 
 	try {
 		// Lock and update in a single transaction to keep data consistent.
 		await connection.beginTransaction();
+		transactionStarted = true;
 
 		const existingBook = await bookModel.getBookForUpdate(connection, bookId);
 		if (!existingBook) {
@@ -257,11 +432,18 @@ async function updateBook(id, payload) {
 		}
 
 		await connection.commit();
+		transactionStarted = false;
 
 		const updatedBook = await bookModel.getBookById(bookId);
 		return toBookResponse(updatedBook);
 	} catch (error) {
-		await connection.rollback();
+		if (transactionStarted) {
+			try {
+				await connection.rollback();
+			} catch (rollbackError) {
+				// Keep original application error as primary failure.
+			}
+		}
 
 		if (error.code === "ER_DUP_ENTRY") {
 			throw createError("Book with this ISBN already exists", 409);
@@ -276,27 +458,60 @@ async function updateBook(id, payload) {
 // DELETE: remove book and surface friendly conflict errors.
 async function deleteBook(id) {
 	const bookId = parseBookId(id);
+	const connection = await bookModel.getConnection();
+	let transactionStarted = false;
 
 	try {
-		const affectedRows = await bookModel.deleteBook(bookId);
+		await connection.beginTransaction();
+		transactionStarted = true;
+
+		// Lock book row to avoid concurrent issue operations while deleting.
+		const existingBook = await bookModel.getBookForUpdate(connection, bookId);
+		if (!existingBook) {
+			throw createError("Book not found", 404);
+		}
+
+		const activeIssuesCount = await bookModel.countActiveIssuesForBook(bookId, connection);
+		if (activeIssuesCount > 0) {
+			throw createError("Cannot delete this book because it is currently issued", 409);
+		}
+
+		// Book can be deleted once all issues are returned, so clear returned history for this book.
+		await bookModel.deleteReturnedIssuesByBook(bookId, connection);
+
+		const affectedRows = await bookModel.deleteBook(bookId, connection);
 
 		if (affectedRows === 0) {
 			throw createError("Book not found", 404);
 		}
 
+		await connection.commit();
+		transactionStarted = false;
+
 		return { book_id: bookId };
 	} catch (error) {
+		if (transactionStarted) {
+			try {
+				await connection.rollback();
+			} catch (rollbackError) {
+				// Keep original application error as primary failure.
+			}
+		}
+
 		if (error.code === "ER_ROW_IS_REFERENCED_2") {
-			throw createError("Cannot delete this book because issue records exist", 409);
+			throw createError("Cannot delete this book because it is currently issued", 409);
 		}
 
 		throw error;
+	} finally {
+		connection.release();
 	}
 }
 
 module.exports = {
 	createBook,
 	getAllBooks,
+	searchBooks,
 	getBookById,
 	updateBook,
 	deleteBook,

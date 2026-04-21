@@ -1,5 +1,16 @@
 const pool = require("../config/db");
 
+function resolveMemberSortColumn(sortBy) {
+	const sortMap = {
+		member_id: "m.member_id",
+		name: "m.name",
+		email: "m.email",
+		membership_date: "m.membership_date",
+	};
+
+	return sortMap[sortBy] || sortMap.member_id;
+}
+
 // Creates member record.
 async function insertMember(memberData) {
 	const [result] = await pool.query(
@@ -33,6 +44,35 @@ async function getAllMembers() {
 	);
 
 	return rows;
+}
+
+// Gets members with optional sorting and pagination.
+async function getMembersForListing(options = {}) {
+	const sortColumn = resolveMemberSortColumn(options.sortBy);
+	const sortDirection = options.sortOrder === "DESC" ? "DESC" : "ASC";
+
+	const params = [];
+	let limitSql = "";
+
+	if (Number.isInteger(options.limit) && options.limit > 0) {
+		limitSql = " LIMIT ? OFFSET ?";
+		params.push(options.limit, options.offset || 0);
+	}
+
+	const [rows] = await pool.query(
+		`SELECT m.member_id, m.name, m.email, m.phone, m.membership_date
+		 FROM members m
+		 ORDER BY ${sortColumn} ${sortDirection}${limitSql}`,
+		params
+	);
+
+	return rows;
+}
+
+// Counts total members for paginated responses.
+async function countMembersForListing() {
+	const [rows] = await pool.query("SELECT COUNT(*) AS total FROM members");
+	return rows[0].total;
 }
 
 // Gets member by id.
@@ -98,6 +138,8 @@ module.exports = {
 	insertMember,
 	findMemberByEmail,
 	getAllMembers,
+	getMembersForListing,
+	countMembersForListing,
 	getMemberById,
 	getMemberBorrowingHistory,
 	getMemberIssues,

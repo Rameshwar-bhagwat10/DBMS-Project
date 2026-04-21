@@ -1,5 +1,8 @@
 const memberModel = require("../models/memberModel");
 
+const MAX_PAGE_SIZE = 100;
+const MEMBER_SORT_FIELDS = new Set(["member_id", "name", "email", "membership_date"]);
+
 // Builds consistent operational errors for middleware formatting.
 function createError(message, statusCode = 400) {
 	const error = new Error(message);
@@ -16,6 +19,77 @@ function parseMemberId(id) {
 	}
 
 	return memberId;
+}
+
+function parsePositiveInteger(value, fieldName) {
+	const parsed = Number(value);
+
+	if (!Number.isInteger(parsed) || parsed <= 0) {
+		throw createError(`${fieldName} must be a positive integer`, 400);
+	}
+
+	return parsed;
+}
+
+function parsePaginationOptions(queryParams = {}) {
+	const hasPage = queryParams.page !== undefined;
+	const hasLimit = queryParams.limit !== undefined;
+
+	if (!hasPage && !hasLimit) {
+		return {
+			paginated: false,
+			page: 1,
+			limit: null,
+			offset: 0,
+		};
+	}
+
+	const page = parsePositiveInteger(hasPage ? queryParams.page : 1, "page");
+	const limit = parsePositiveInteger(hasLimit ? queryParams.limit : 10, "limit");
+
+	if (limit > MAX_PAGE_SIZE) {
+		throw createError(`limit must be less than or equal to ${MAX_PAGE_SIZE}`, 400);
+	}
+
+	return {
+		paginated: true,
+		page,
+		limit,
+		offset: (page - 1) * limit,
+	};
+}
+
+function parseSortOptions(queryParams = {}) {
+	const sortBy =
+		queryParams.sort !== undefined ? String(queryParams.sort).trim().toLowerCase() : "member_id";
+
+	if (!MEMBER_SORT_FIELDS.has(sortBy)) {
+		throw createError(`sort must be one of: ${Array.from(MEMBER_SORT_FIELDS).join(", ")}`, 400);
+	}
+
+	const sortOrder =
+		queryParams.order !== undefined ? String(queryParams.order).trim().toUpperCase() : "ASC";
+
+	if (sortOrder !== "ASC" && sortOrder !== "DESC") {
+		throw createError("order must be either ASC or DESC", 400);
+	}
+
+	return {
+		sortBy,
+		sortOrder,
+	};
+}
+
+function buildPaginatedResponse(items, pagination, totalItems) {
+	return {
+		items,
+		pagination: {
+			page: pagination.page,
+			limit: pagination.limit,
+			total_items: totalItems,
+			total_pages: totalItems === 0 ? 0 : Math.ceil(totalItems / pagination.limit),
+		},
+	};
 }
 
 function normalizeText(value) {
@@ -109,8 +183,23 @@ async function createMember(payload) {
 	}
 }
 
-async function getAllMembers() {
-	return memberModel.getAllMembers();
+async function getAllMembers(queryParams = {}) {
+	const pagination = parsePaginationOptions(queryParams);
+	const sort = parseSortOptions(queryParams);
+
+	const members = await memberModel.getMembersForListing({
+		sortBy: sort.sortBy,
+		sortOrder: sort.sortOrder,
+		limit: pagination.limit,
+		offset: pagination.offset,
+	});
+
+	if (!pagination.paginated) {
+		return members;
+	}
+
+	const totalItems = await memberModel.countMembersForListing();
+	return buildPaginatedResponse(members, pagination, totalItems);
 }
 
 async function getMemberById(id) {
@@ -178,7 +267,7 @@ async function deleteMember(id) {
 
 	const issues = await memberModel.getMemberIssues(memberId);
 	if (issues.length > 0) {
-		throw createError("Cannot delete member because issue records exist", 409);
+		throw createError("Cannot delete member because borrowing history exists for this member", 409);
 	}
 
 	await memberModel.deleteMember(memberId);

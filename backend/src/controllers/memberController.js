@@ -14,7 +14,7 @@ async function createMember(req, res, next) {
 // Fetch all members.
 async function getAllMembers(req, res, next) {
 	try {
-		const members = await memberService.getAllMembers();
+		const members = await memberService.getAllMembers(req.query);
 		return sendSuccess(res, "Members fetched successfully", members);
 	} catch (error) {
 		return next(error);
