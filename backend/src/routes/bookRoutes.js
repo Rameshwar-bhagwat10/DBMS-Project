@@ -7,14 +7,15 @@ const {
 	updateBook,
 	deleteBook,
 } = require("../controllers/bookController");
+const { validateBook, validateBookUpdate, validateIdParam } = require("../middlewares/validateMiddleware");
 
 const router = express.Router();
 
 // Book module routes: only maps HTTP endpoints to controller handlers.
-router.post("/", createBook);
+router.post("/", validateBook, createBook);
 router.get("/", getAllBooks);
-router.get("/:id", getBookById);
-router.put("/:id", updateBook);
-router.delete("/:id", deleteBook);
+router.get("/:id", validateIdParam("id", "book_id"), getBookById);
+router.put("/:id", validateIdParam("id", "book_id"), validateBookUpdate, updateBook);
+router.delete("/:id", validateIdParam("id", "book_id"), deleteBook);
 
 module.exports = router;

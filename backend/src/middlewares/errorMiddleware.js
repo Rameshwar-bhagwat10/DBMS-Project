@@ -1,14 +1,44 @@
 const { sendError } = require("../utils/responseHandler");
 
+function getDatabaseErrorResponse(error) {
+	if (!error || !error.code) {
+		return null;
+	}
+
+	if (!String(error.code).startsWith("ER_")) {
+		return null;
+	}
+
+	if (error.code === "ER_DUP_ENTRY") {
+		return {
+			statusCode: 409,
+			message: "Duplicate entry",
+		};
+	}
+
+	if (error.code === "ER_NO_REFERENCED_ROW_2" || error.code === "ER_ROW_IS_REFERENCED_2") {
+		return {
+			statusCode: 409,
+			message: "Operation violates data integrity constraints",
+		};
+	}
+
+	return {
+		statusCode: 500,
+		message: "Database operation failed",
+	};
+}
+
 function errorMiddleware(err, req, res, next) {
-	// Centralized error shape for all APIs.
-	const statusCode = err.statusCode || 500;
-	const message = err.message || "Internal server error";
+	const dbError = getDatabaseErrorResponse(err);
+	if (dbError) {
+		return sendError(res, dbError.message, dbError.statusCode);
+	}
 
-	// Expose stack trace only in development mode.
-	const errorData = process.env.NODE_ENV === "development" ? { stack: err.stack } : {};
+	const statusCode = Number.isInteger(err.statusCode) ? err.statusCode : 500;
+	const message = statusCode >= 500 ? "Internal server error" : err.message || "Request failed";
 
-	return sendError(res, message, statusCode, errorData);
+	return sendError(res, message, statusCode);
 }
 
 module.exports = errorMiddleware;
