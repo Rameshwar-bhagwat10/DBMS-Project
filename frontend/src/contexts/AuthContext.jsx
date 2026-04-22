@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { getCurrentUser, loginUser } from "../services/authService";
+import { getCurrentUser, loginUser, logoutUser } from "../services/authService";
 
 const AuthContext = createContext(null);
 
@@ -61,6 +61,9 @@ export function AuthProvider({ children }) {
 		setToken(null);
 		setUser(null);
 		setLoading(false);
+
+		// Fire-and-forget: local logout should still complete if backend is unavailable.
+		void logoutUser().catch(() => {});
 	}
 
 	/**

@@ -19,3 +19,7 @@ export async function updateProfile({ name, email, currentPassword, newPassword 
 	});
 	return response.data.data;
 }
+
+export async function logoutUser() {
+	await api.post("/auth/logout");
+}

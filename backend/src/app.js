@@ -12,8 +12,15 @@ const errorMiddleware = require("./middlewares/errorMiddleware");
 
 const app = express();
 
+const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
+
 // Core middleware.
-app.use(cors());
+app.use(
+	cors({
+		origin: frontendOrigin,
+		credentials: true,
+	})
+);
 app.use(express.json());
 
 // Public routes (no auth required).

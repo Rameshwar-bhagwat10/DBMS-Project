@@ -4,6 +4,7 @@ const TOKEN_KEY = "lib_auth_token";
 
 const api = axios.create({
 	baseURL: "http://localhost:5000/api",
+	withCredentials: true,
 });
 
 // Attach JWT token to every request.
