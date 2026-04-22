@@ -1,37 +1,76 @@
+-- =========================================================
+-- Library Management System - Seed Data
+-- Source: backend/scripts/resetAndSeedMaharashtraData.js
+-- Seeds: authors, books, book_authors, members
+-- =========================================================
+
 USE library_db;
 
+-- =========================================================
+-- Authors
+-- =========================================================
 INSERT INTO authors (author_id, name) VALUES
-(1, 'J.K. Rowling'),
-(2, 'George Orwell'),
-(3, 'Harper Lee'),
-(4, 'Paulo Coelho'),
-(5, 'Yuval Noah Harari');
+(1, 'R. K. Narayan'),
+(2, 'Munshi Premchand'),
+(3, 'Ruskin Bond'),
+(4, 'Amish Tripathi'),
+(5, 'Chetan Bhagat'),
+(6, 'Sudha Murty'),
+(7, 'Shivaji Sawant'),
+(8, 'Khushwant Singh'),
+(9, 'Kalki Krishnamurthy'),
+(10, 'S. L. Bhyrappa');
 
+-- =========================================================
+-- Books
+-- Note: available_copies starts equal to total_copies.
+-- =========================================================
 INSERT INTO books (book_id, title, isbn, publisher, total_copies, available_copies) VALUES
-(1, 'Harry Potter and the Philosopher''s Stone', '9780747532699', 'Bloomsbury', 12, 12),
-(2, '1984', '9780451524935', 'Signet Classics', 8, 8),
-(3, 'To Kill a Mockingbird', '9780061120084', 'Harper Perennial Modern Classics', 10, 10),
-(4, 'The Alchemist', '9780062315007', 'HarperOne', 7, 7),
-(5, 'Sapiens: A Brief History of Humankind', '9780062316097', 'Harper', 9, 9);
+(1, 'Malgudi Days', '9788185986024', 'Indian Thought Publications', 12, 12),
+(2, 'Godaan', '9788126713641', 'Rajpal and Sons', 10, 10),
+(3, 'The Blue Umbrella', '9788129145043', 'Rupa Publications', 9, 9),
+(4, 'The Immortals of Meluha', '9789382618348', 'Westland', 14, 14),
+(5, 'Five Point Someone', '9788129135723', 'Rupa Publications', 11, 11),
+(6, 'Wise and Otherwise', '9780143417231', 'Penguin India', 13, 13),
+(7, 'Mrityunjaya', '9788177666514', 'Continental Prakashan', 8, 8),
+(8, 'Train to Pakistan', '9780143065883', 'Penguin India', 7, 7),
+(9, 'Ponniyin Selvan Part 1', '9789350293379', 'Vanathi Pathippagam', 10, 10),
+(10, 'Parva', '9780198066231', 'Oxford University Press', 6, 6);
 
+-- =========================================================
+-- Book-Author Mapping
+-- One-to-one mapping in this dataset (book_id = author_id).
+-- =========================================================
 INSERT INTO book_authors (book_id, author_id) VALUES
 (1, 1),
 (2, 2),
 (3, 3),
 (4, 4),
-(5, 5);
+(5, 5),
+(6, 6),
+(7, 7),
+(8, 8),
+(9, 9),
+(10, 10);
 
+-- =========================================================
+-- Members
+-- =========================================================
 INSERT INTO members (member_id, name, email, phone, membership_date) VALUES
-(1, 'Aisha Verma', 'aisha.verma@example.com', '9876543210', '2026-01-10'),
-(2, 'Rohit Sharma', 'rohit.sharma@example.com', '9890011223', '2026-01-15'),
-(3, 'Neha Patel', 'neha.patel@example.com', '9811122233', '2026-02-05'),
-(4, 'Arjun Mehta', 'arjun.mehta@example.com', '9822233344', '2026-02-20'),
-(5, 'Priya Nair', 'priya.nair@example.com', '9833344455', '2026-03-01');
+(1, 'Aarav Patil', 'aarav.patil@maharashtrarun.edu.in', '9876500001', '2026-04-01'),
+(2, 'Sanika Deshmukh', 'sanika.deshmukh@maharashtrarun.edu.in', '9876500002', '2026-04-02'),
+(3, 'Omkar Jadhav', 'omkar.jadhav@maharashtrarun.edu.in', '9876500003', '2026-04-03'),
+(4, 'Isha Kulkarni', 'isha.kulkarni@maharashtrarun.edu.in', '9876500004', '2026-04-04'),
+(5, 'Pranav Shinde', 'pranav.shinde@maharashtrarun.edu.in', '9876500005', '2026-04-05'),
+(6, 'Rutuja Pawar', 'rutuja.pawar@maharashtrarun.edu.in', '9876500006', '2026-04-06'),
+(7, 'Vedant Joshi', 'vedant.joshi@maharashtrarun.edu.in', '9876500007', '2026-04-07'),
+(8, 'Sneha More', 'sneha.more@maharashtrarun.edu.in', '9876500008', '2026-04-08'),
+(9, 'Atharva Bhosale', 'atharva.bhosale@maharashtrarun.edu.in', '9876500009', '2026-04-09'),
+(10, 'Gauri Chavan', 'gauri.chavan@maharashtrarun.edu.in', '9876500010', '2026-04-10');
 
-INSERT INTO issues (issue_id, book_id, member_id, issue_date, due_date, return_date) VALUES
-(1, 1, 1, '2026-04-10', '2026-04-24', NULL),
-(2, 2, 2, '2026-03-01', '2026-03-15', '2026-03-14'),
-(3, 3, 3, '2026-02-01', '2026-02-15', '2026-02-18');
-
-INSERT INTO fines (fine_id, issue_id, amount, paid) VALUES
-(1, 3, 30.00, FALSE);
+-- =========================================================
+-- Transaction tables intentionally left empty:
+-- - issues
+-- - fines
+-- This matches resetAndSeedMaharashtraData.js behavior.
+-- =========================================================
